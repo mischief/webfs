@@ -33,12 +33,12 @@ plan 9
 
     # fetch
     hget https://github.com/mischief/webfs/archive/master.zip > webfs.zip
-    unzip webfs.zip
+    unzip < webfs.zip
     cd webfs-master
     go build
 
     # run
-    ./webfs &
+    ./webfs-master &
 
     # mount
     srv 'tcp!$ip!5640' web /mnt/web
