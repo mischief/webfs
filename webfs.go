@@ -3,12 +3,12 @@ package main
 import (
 	"bufio"
 	"bytes"
-	"flag"
-	"fmt"
 	"code.google.com/p/go9p/p"
 	"code.google.com/p/go9p/p/srv"
-	"io/ioutil"
+	"flag"
+	"fmt"
 	"io"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"net/url"
@@ -28,13 +28,13 @@ func (u *User) IsMember(g p.Group) bool { return false }
 func (u *User) Members() []p.User       { return []p.User{u} }
 
 type HttpClient struct {
-	dir *srv.File
+	dir     *srv.File
 	baseurl *url.URL
-	url *url.URL
-	req  *http.Request
-	resp *http.Response
-	body []byte
-	id   int
+	url     *url.URL
+	req     *http.Request
+	resp    *http.Response
+	body    []byte
+	id      int
 }
 
 type ClientBody struct {
@@ -185,22 +185,22 @@ const (
 )
 
 var (
-	parsedtab = map[Qparsed]string {
-		Qurl: "url",
-		Qscheme: "scheme",
-		Quser: "user",
-		Qpass: "pass",
-		Qhost: "host",
-		Qport: "port",
-		Qpath: "path",
-		Qquery: "query",
+	parsedtab = map[Qparsed]string{
+		Qurl:      "url",
+		Qscheme:   "scheme",
+		Quser:     "user",
+		Qpass:     "pass",
+		Qhost:     "host",
+		Qport:     "port",
+		Qpath:     "path",
+		Qquery:    "query",
 		Qfragment: "fragment",
 	}
 )
 
 type ParsedFile struct {
 	srv.File
-	c *HttpClient
+	c     *HttpClient
 	ptype Qparsed
 }
 
@@ -214,12 +214,12 @@ func (pf *ParsedFile) Read(fid *srv.FFid, buf []byte, offset uint64) (int, error
 	out := new(bytes.Buffer)
 
 	switch pf.ptype {
-		case Qurl:
-			io.WriteString(out, pf.c.req.URL.String())
-		case Qfragment:
-			io.WriteString(out, pf.c.req.URL.Fragment)
-		default:
-			return 0, srv.Enotimpl
+	case Qurl:
+		io.WriteString(out, pf.c.req.URL.String())
+	case Qfragment:
+		io.WriteString(out, pf.c.req.URL.Fragment)
+	default:
+		return 0, srv.Enotimpl
 	}
 
 	copy(buf, out.Bytes())
@@ -338,6 +338,7 @@ remove:
 	}
 	return 0, err
 }
+
 // Root ctl
 type RootCtl struct {
 	srv.File
