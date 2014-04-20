@@ -13,16 +13,18 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"runtime"
 	"strings"
 )
 
 // Implements p.User and p.Group
 type User struct {
-	n string
+	n   string
+	uid int
 }
 
 func (u *User) Name() string            { return u.n }
-func (u *User) Id() int                 { return -1 }
+func (u *User) Id() int                 { return u.uid }
 func (u *User) Groups() []p.Group       { return []p.Group{u} }
 func (u *User) IsMember(g p.Group) bool { return false }
 func (u *User) Members() []p.User       { return []p.User{u} }
@@ -50,10 +52,16 @@ func (cbody *ClientBody) Open(fid *srv.FFid, mode uint8) error {
 		return fmt.Errorf("body: %d url not set", cbody.c.id)
 	}
 
+	// set url
 	if cbody.c.baseurl != nil {
 		cbody.c.req.URL = cbody.c.baseurl.ResolveReference(cbody.c.url)
 	} else {
 		cbody.c.req.URL = cbody.c.url
+	}
+
+	// add headers
+	if _, ok := cbody.c.req.Header["Accept"]; !ok {
+		cbody.c.req.Header.Set("Accept", "*/*")
 	}
 
 	if *debug > 0 {
@@ -119,7 +127,7 @@ type ClientCtl struct {
 
 func (cctl *ClientCtl) Read(fid *srv.FFid, buf []byte, offset uint64) (int, error) {
 	// we only allow a single read from us, change the offset and we're done
-	if offset > uint64(0) {
+	if offset > 0 {
 		return 0, nil
 	}
 
@@ -139,7 +147,7 @@ func (cctl *ClientCtl) Write(fid *srv.FFid, data []byte, offset uint64) (int, er
 	for sc.Scan() {
 		l := sc.Text()
 		log.Printf("ctl: %d %s", cctl.c.id, l)
-		fields := strings.Fields(l)
+		fields := strings.SplitN(l, " ", 2)
 
 		switch fields[0] {
 		case "url":
@@ -152,6 +160,7 @@ func (cctl *ClientCtl) Write(fid *srv.FFid, data []byte, offset uint64) (int, er
 				return 0, fmt.Errorf("ctl: url parse: %s", err)
 			}
 			cctl.c.url = url
+
 		case "baseurl":
 			if len(fields) < 2 {
 				return 0, fmt.Errorf("ctl: missing argument in control message")
@@ -162,6 +171,40 @@ func (cctl *ClientCtl) Write(fid *srv.FFid, data []byte, offset uint64) (int, er
 				return 0, fmt.Errorf("ctl: url parse: %s", err)
 			}
 			cctl.c.baseurl = url
+
+		case "useragent":
+			if len(fields) < 2 {
+				return 0, fmt.Errorf("ctl: missing argument in control message")
+			}
+			cctl.c.req.Header.Set("User-agent", fields[1])
+
+		case "contenttype":
+			if len(fields) < 2 {
+				return 0, fmt.Errorf("ctl: missing argument in control message")
+			}
+			cctl.c.req.Header.Set("Content-Type", fields[1])
+
+		case "request":
+			if len(fields) < 2 {
+				return 0, fmt.Errorf("ctl: missing argument in control message")
+			}
+			cctl.c.req.Method = fields[1]
+
+		case "headers":
+			if len(fields) < 2 {
+				return 0, fmt.Errorf("ctl: missing argument in control message")
+			}
+			hdr := strings.SplitN(fields[1], " ", 2)
+			if len(hdr) < 2 {
+				// if less than two, remove header.
+				cctl.c.req.Header.Del(hdr[0])
+			} else {
+				// add header
+				cctl.c.req.Header.Set(hdr[0], hdr[1])
+			}
+
+		case "":
+			// nop
 		default:
 			return 0, fmt.Errorf("ctl: unknown control message %s", fields[0])
 		}
@@ -205,6 +248,10 @@ type ParsedFile struct {
 }
 
 func (pf *ParsedFile) Read(fid *srv.FFid, buf []byte, offset uint64) (int, error) {
+	if offset > 0 {
+		return 0, nil
+	}
+
 	if pf.c.req.URL == nil {
 		return 0, fmt.Errorf("body: %d url not set", pf.c.id)
 	}
@@ -280,6 +327,8 @@ func (cl *Clone) Read(fid *srv.FFid, buf []byte, offset uint64) (int, error) {
 		ProtoMinor: 1,
 		Header:     make(http.Header),
 	}
+
+	client.req.Header.Set("User-Agent", useragent)
 
 	// web/0
 	dir = new(srv.File)
@@ -390,11 +439,16 @@ var (
 )
 
 func init() {
-	un := os.Getenv("user")
+	userenv := "USER"
+	if runtime.GOOS == "plan9" {
+		userenv = "user"
+	}
+
+	un := os.Getenv(userenv)
 	if un != "" {
-		user = &User{un}
+		user = &User{un, -1}
 	} else {
-		user = &User{"none"}
+		user = &User{"none", -1}
 	}
 }
 
@@ -432,21 +486,10 @@ func main() {
 	if err != nil {
 		goto error
 	}
-	/*
-		webfs := new(Webfs)
-		webfs.useragent = "hjdicks"
-		webfs.timeout = 10000
-		webfs.Id = "webfs"
-		webfs.Debuglevel = 1
-		webfs.Start(webfs)
-		err := webfs.StartNetListener("tcp", ":5640")
-		if err != nil {
-			goto error
-		}*/
 
 	return
 
 error:
-	log.Println(fmt.Sprintf("Error: %s", err))
+	log.Printf("webfs: %s", err)
 
 }
